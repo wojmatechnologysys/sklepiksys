@@ -1,110 +1,69 @@
-const API_URL = 'https://sklepik-backend.onrender.com/api'; // <-- podmień na swój adres
-const app = document.getElementById('app');
+const api = 'https://sklepik-backend.onrender.com'; // zmień na swój jeśli trzeba
+let token = null;
+let user = null;
 
-function showLogin() {
-  app.innerHTML = \`
-    <h2>Logowanie</h2>
-    <input id="login" class="form-control mb-2" placeholder="Login">
-    <input id="password" type="password" class="form-control mb-2" placeholder="Hasło">
-    <button class="btn btn-primary" onclick="login()">Zaloguj</button>
-  \`;
-}
-
-async function login() {
-  const username = document.getElementById('login').value;
+function login() {
+  const username = document.getElementById('username').value;
   const password = document.getElementById('password').value;
 
-  const res = await fetch(API_URL + '/login', {
+  fetch(`${api}/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password })
-  });
-
-  if (res.ok) {
-    const data = await res.json();
-    localStorage.setItem('user', JSON.stringify({ username, role: data.role }));
-    showPanel();
-  } else {
-    alert('Błędny login lub hasło');
-  }
+  })
+  .then(res => res.json())
+  .then(data => {
+    token = data.token;
+    user = username;
+    document.getElementById('user').textContent = user;
+    document.getElementById('login').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    loadProducts();
+  })
+  .catch(() => alert('Błąd logowania'));
 }
 
 function logout() {
-  localStorage.removeItem('user');
-  showLogin();
+  token = null;
+  user = null;
+  document.getElementById('login').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
 }
 
-function showPanel() {
-  const user = JSON.parse(localStorage.getItem('user'));
-  if (!user) return showLogin();
-
-  app.innerHTML = \`
-    <div class="d-flex justify-content-between align-items-center">
-      <h2>Sklepik – ${user.role}</h2>
-      <button class="btn btn-danger" onclick="logout()">Wyloguj</button>
-    </div>
-    <ul class="nav nav-tabs mt-3" id="tabs">
-      <li class="nav-item"><a class="nav-link active" onclick="showProducts()">Magazyn</a></li>
-      <li class="nav-item"><a class="nav-link" onclick="showTransactions()">Transakcje</a></li>
-      \${user.role === 'admin' ? '<li class="nav-item"><a class="nav-link" onclick="showUsers()">Użytkownicy</a></li>' : ''}
-    </ul>
-    <div id="panel" class="mt-3"></div>
-  \`;
-
-  showProducts();
-}
-
-async function showProducts() {
-  const res = await fetch(API_URL + '/products');
-  const products = await res.json();
-  let html = '<h4>Produkty</h4><ul class="list-group">';
-
-  for (const p of products) {
-    html += \`<li class="list-group-item d-flex justify-content-between align-items-center">
-      \${p.name} – \${p.price} zł – \${p.stock} szt.
-      <button class="btn btn-sm btn-danger" onclick="deleteProduct('\${p.id}')">Usuń</button>
-    </li>\`;
-  }
-  html += '</ul>';
-
-  html += \`
-    <h5 class="mt-4">Dodaj nowy produkt</h5>
-    <input id="nazwa" class="form-control mb-1" placeholder="Nazwa">
-    <input id="cena" class="form-control mb-1" type="number" placeholder="Cena">
-    <input id="ilosc" class="form-control mb-2" type="number" placeholder="Ilość">
-    <button class="btn btn-success" onclick="addProduct()">Dodaj</button>
-  \`;
-
-  document.getElementById('panel').innerHTML = html;
-}
-
-async function addProduct() {
-  const product = {
-    name: document.getElementById('nazwa').value,
-    price: parseFloat(document.getElementById('cena').value),
-    stock: parseInt(document.getElementById('ilosc').value)
-  };
-
-  await fetch(API_URL + '/products', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(product)
+function loadProducts() {
+  fetch(`${api}/products`, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  .then(res => res.json())
+  .then(products => {
+    const list = document.getElementById('product-list');
+    list.innerHTML = '';
+    products.forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = `${p.name} - ${p.price} zł (${p.stock} szt.)`;
+      list.appendChild(li);
+    });
   });
-
-  showProducts();
 }
 
-async function deleteProduct(id) {
-  await fetch(API_URL + '/products/' + id, { method: 'DELETE' });
-  showProducts();
-}
+function addProduct() {
+  const name = document.getElementById('new-name').value;
+  const price = parseFloat(document.getElementById('new-price').value);
+  const stock = parseInt(document.getElementById('new-stock').value);
 
-function showTransactions() {
-  document.getElementById('panel').innerHTML = '<p>(Tę zakładkę jeszcze robię... 😅)</p>';
+  fetch(`${api}/products`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`
+    },
+    body: JSON.stringify({ name, price, stock })
+  })
+  .then(res => {
+    if (res.ok) {
+      loadProducts();
+    } else {
+      alert('Błąd dodawania produktu');
+    }
+  });
 }
-
-function showUsers() {
-  document.getElementById('panel').innerHTML = '<p>(Panel admina w przygotowaniu 👑)</p>';
-}
-
-showPanel();
